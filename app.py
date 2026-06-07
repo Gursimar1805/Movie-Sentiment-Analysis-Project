@@ -20,14 +20,14 @@ lemmatizer = WordNetLemmatizer()
 stops = set(stopwords.words('english'))
 stops = stops - {'not', 'no', 'nor'} # Keep sentiment-altering stopwords
 
-# Load the trained model and vectorizer
+# Load the trained model and vectorizer with corrected filenames
 try:
-    with open('model.pkl', 'rb') as file:
+    with open('sentiment_model.pkl', 'rb') as file:
         model = pickle.load(file)
-    with open('vectorizer.pkl', 'rb') as file:
+    with open('tfidf_vectorizer.pkl', 'rb') as file:
         tfidf_vectorizer = pickle.load(file)
 except FileNotFoundError:
-    st.error("Error: model.pkl or vectorizer.pkl not found. Make sure they are in the same directory as app.py")
+    st.error("Error: sentiment_model.pkl or tfidf_vectorizer.pkl not found. Make sure they are in the same directory as app.py")
     st.stop()
 
 # --- Preprocessing functions (consistent with notebook) ---
