@@ -5,55 +5,122 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-# MUST come after importing streamlit
+# --------------------------------------------------
+# PAGE CONFIG (Must be first Streamlit command)
+# --------------------------------------------------
 st.set_page_config(
-    page_title="Movie Review Sentiment Analysis",
+    page_title="Movie Review Sentiment Analyzer",
     page_icon="🎬",
     layout="centered"
 )
 
-# --- Streamlit App UI ---
+# --------------------------------------------------
+# DOWNLOAD NLTK RESOURCES
+# --------------------------------------------------
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
 
-st.set_page_config(
-    page_title="Movie Review Sentiment Analysis",
-    page_icon="🎬",
-    layout="centered"
-)
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
-# Custom CSS
+# --------------------------------------------------
+# NLP SETUP
+# --------------------------------------------------
+lemmatizer = WordNetLemmatizer()
+
+stops = set(stopwords.words('english'))
+stops = stops - {'not', 'no', 'nor'}
+
+# --------------------------------------------------
+# LOAD MODEL & VECTORIZER
+# --------------------------------------------------
+try:
+    with open('sentiment_model.pkl', 'rb') as file:
+        model = pickle.load(file)
+
+    with open('tfidf_vectorizer.pkl', 'rb') as file:
+        tfidf_vectorizer = pickle.load(file)
+
+except FileNotFoundError:
+    st.error(
+        "sentiment_model.pkl or tfidf_vectorizer.pkl not found."
+    )
+    st.stop()
+
+# --------------------------------------------------
+# PREPROCESSING FUNCTIONS
+# --------------------------------------------------
+def clean_html(text):
+    clean = re.compile('<.*?>')
+    return re.sub(clean, '', text)
+
+def convert_lower(text):
+    return text.lower()
+
+def remove_special(text):
+    x = ''
+    for i in text:
+        if i.isalnum():
+            x += i
+        else:
+            x += ' '
+    return x
+
+def clean_text(text):
+
+    text = clean_html(text)
+    text = convert_lower(text)
+    text = remove_special(text)
+
+    words = []
+
+    for word in text.split():
+        if word not in stops:
+            words.append(lemmatizer.lemmatize(word))
+
+    return " ".join(words)
+
+# --------------------------------------------------
+# CUSTOM CSS
+# --------------------------------------------------
 st.markdown("""
 <style>
+
 .main {
     background-color: #0E1117;
 }
 
-.title {
-    text-align: center;
-    font-size: 42px;
-    font-weight: bold;
-    color: #FF4B4B;
+.main-title {
+    text-align:center;
+    font-size:42px;
+    font-weight:bold;
+    color:#FF4B4B;
+    margin-bottom:5px;
 }
 
-.subtitle {
-    text-align: center;
-    font-size: 18px;
-    color: #B0B0B0;
-    margin-bottom: 25px;
+.sub-title {
+    text-align:center;
+    color:#BDBDBD;
+    font-size:18px;
+    margin-bottom:20px;
 }
 
-.info-box {
-    background: linear-gradient(135deg, #1f2937, #111827);
-    padding: 15px;
-    border-radius: 12px;
-    border-left: 5px solid #FF4B4B;
-    margin-bottom: 20px;
+.info-card {
+    background: linear-gradient(135deg,#1F2937,#111827);
+    padding:18px;
+    border-radius:12px;
+    border-left:6px solid #FF4B4B;
+    margin-bottom:20px;
 }
 
 .footer {
     text-align:center;
-    color: #888888;
-    margin-top: 40px;
-    font-size: 15px;
+    color:gray;
+    margin-top:20px;
 }
 
 .author {
@@ -62,49 +129,100 @@ st.markdown("""
     font-size:18px;
     font-weight:bold;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
-# Header
-st.markdown('<div class="title">🎬 Movie Review Sentiment Analyzer</div>',
-            unsafe_allow_html=True)
+# --------------------------------------------------
+# HEADER
+# --------------------------------------------------
+st.markdown(
+    '<div class="main-title">🎬 Movie Review Sentiment Analyzer</div>',
+    unsafe_allow_html=True
+)
 
+st.markdown(
+    '<div class="sub-title">AI Powered Sentiment Classification using NLP & Machine Learning</div>',
+    unsafe_allow_html=True
+)
+
+# --------------------------------------------------
+# PROJECT DESCRIPTION
+# --------------------------------------------------
 st.markdown("""
-<div class="subtitle">
-AI-Powered Movie Review Classification using TF-IDF & Machine Learning
+<div class="info-card">
+<b>About Project</b><br><br>
+
+This application predicts whether a movie review expresses a
+<b>Positive</b> or <b>Negative</b> sentiment.
+
+<b>Techniques Used:</b>
+
+<ul>
+<li>TF-IDF Vectorization</li>
+<li>Text Cleaning & Lemmatization</li>
+<li>Stopword Removal</li>
+<li>Machine Learning Classification</li>
+</ul>
+
 </div>
 """, unsafe_allow_html=True)
 
-# Project Info Card
-st.markdown("""
-<div class="info-box">
-<b>About Project</b><br>
-This application analyzes movie reviews and predicts whether the sentiment expressed is Positive 😊 or Negative 😞.
-The model has been trained using Natural Language Processing (NLP) techniques and TF-IDF feature extraction.
-</div>
-""", unsafe_allow_html=True)
+# --------------------------------------------------
+# SIDEBAR
+# --------------------------------------------------
+with st.sidebar:
 
-# Input Area
+    st.header("📌 Project Details")
+
+    st.write("""
+    **Domain:** Natural Language Processing
+    
+    **Dataset:** Movie Reviews
+    
+    **Feature Extraction:** TF-IDF
+    
+    **Text Processing**
+    - HTML Removal
+    - Lowercasing
+    - Special Character Removal
+    - Stopword Removal
+    - Lemmatization
+    
+    **Output**
+    - Positive Sentiment
+    - Negative Sentiment
+    """)
+
+    st.markdown("---")
+
+    st.success("Built using Streamlit")
+
+# --------------------------------------------------
+# INPUT SECTION
+# --------------------------------------------------
 st.subheader("📝 Enter Movie Review")
 
 user_input = st.text_area(
     "",
-    placeholder="Example: This movie was absolutely fantastic. The acting and storyline were brilliant!",
+    placeholder="Example: This movie was absolutely fantastic. The acting, story and direction were brilliant.",
     height=180
 )
 
-# Prediction Button
-predict_btn = st.button("🔍 Analyze Sentiment", use_container_width=True)
+# --------------------------------------------------
+# PREDICT BUTTON
+# --------------------------------------------------
+if st.button("🔍 Analyze Sentiment", use_container_width=True):
 
-if predict_btn:
+    if user_input.strip():
 
-    if user_input:
-
-        with st.spinner("Analyzing Review..."):
+        with st.spinner("Analyzing review..."):
 
             processed_input = clean_text(user_input)
 
-            vectorized_input = tfidf_vectorizer.transform([processed_input])
+            vectorized_input = tfidf_vectorizer.transform(
+                [processed_input]
+            )
 
             prediction = model.predict(vectorized_input)
 
@@ -115,62 +233,94 @@ if predict_btn:
 
             predicted_sentiment = sentiment_map[prediction[0]]
 
+            # Probability if model supports it
+            confidence = None
+
+            try:
+                probs = model.predict_proba(vectorized_input)[0]
+                confidence = max(probs)
+            except:
+                pass
+
         st.divider()
 
         col1, col2 = st.columns(2)
 
         with col1:
-            st.metric("Review Length",
-                      f"{len(user_input.split())} Words")
+            st.metric(
+                "Review Length",
+                f"{len(user_input.split())} words"
+            )
 
         with col2:
-            st.metric("Processed Tokens",
-                      f"{len(processed_input.split())}")
+            st.metric(
+                "Processed Tokens",
+                f"{len(processed_input.split())}"
+            )
 
         st.subheader("🧹 Processed Review")
+
         st.info(processed_input)
 
         st.subheader("📊 Prediction Result")
 
         if predicted_sentiment == "Positive":
+
             st.success(
-                "🎉 Positive Sentiment Detected\n\nThis review reflects a favorable opinion about the movie."
+                "🎉 Positive Sentiment Detected"
             )
+
+            st.markdown(
+                "The review expresses a favorable opinion about the movie."
+            )
+
         else:
+
             st.error(
-                "😞 Negative Sentiment Detected\n\nThis review reflects an unfavorable opinion about the movie."
+                "😞 Negative Sentiment Detected"
+            )
+
+            st.markdown(
+                "The review expresses an unfavorable opinion about the movie."
             )
 
         st.markdown(
-            f"### 🎯 Predicted Sentiment: **{predicted_sentiment}**")
+            f"### 🎯 Predicted Sentiment: **{predicted_sentiment}**"
+        )
+
+        if confidence is not None:
+
+            st.subheader("📈 Confidence Score")
+
+            st.progress(float(confidence))
+
+            st.write(
+                f"Confidence: **{confidence*100:.2f}%**"
+            )
 
     else:
-        st.warning("⚠️ Please enter a movie review first.")
+        st.warning("Please enter a review first.")
 
-# Sidebar
-with st.sidebar:
-    st.image(
-        "https://cdn-icons-png.flaticon.com/512/4221/4221419.png",
-        width=120
-    )
+# --------------------------------------------------
+# SAMPLE REVIEWS
+# --------------------------------------------------
+st.markdown("---")
 
-    st.header("📌 Project Details")
+st.subheader("💡 Sample Reviews")
 
-    st.write("""
-    **Model:** Machine Learning Classifier
-    
-    **Feature Extraction:** TF-IDF
-    
-    **Text Processing:**
-    - HTML Removal
-    - Lowercasing
-    - Stopword Removal
-    - Lemmatization
-    
-    **Task:** Binary Sentiment Classification
-    """)
+st.write(
+    "Positive Example: "
+    "*This movie was amazing. The acting and storyline were excellent.*"
+)
 
-# Footer
+st.write(
+    "Negative Example: "
+    "*The movie was boring and a complete waste of time.*"
+)
+
+# --------------------------------------------------
+# FOOTER
+# --------------------------------------------------
 st.markdown("---")
 
 st.markdown(
@@ -179,11 +329,16 @@ st.markdown(
 )
 
 st.markdown(
-    '<div class="footer">B.Tech Computer Science Engineering (AI & ML)</div>',
+    '<div class="footer">B.Tech CSE-AIML</div>',
     unsafe_allow_html=True
 )
 
 st.markdown(
-    '<div class="footer">Built with Streamlit • NLP • Machine Learning</div>',
+    '<div class="footer">Movie Review Sentiment Analysis Project</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="footer">Streamlit • NLP • Machine Learning</div>',
     unsafe_allow_html=True
 )
