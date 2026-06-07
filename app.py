@@ -1,105 +1,175 @@
-import streamlit as st
-import pickle
-import re
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer # Use WordNetLemmatizer
+# --- Streamlit App UI ---
 
-# Download NLTK resources if not already present
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
+st.set_page_config(
+    page_title="Movie Review Sentiment Analysis",
+    page_icon="🎬",
+    layout="centered"
+)
 
-# Initialize lemmatizer and stopwords globally
-lemmatizer = WordNetLemmatizer()
-stops = set(stopwords.words('english'))
-stops = stops - {'not', 'no', 'nor'} # Keep sentiment-altering stopwords
+# Custom CSS
+st.markdown("""
+<style>
+.main {
+    background-color: #0E1117;
+}
 
-# Load the trained model and vectorizer with corrected filenames
-try:
-    with open('sentiment_model.pkl', 'rb') as file:
-        model = pickle.load(file)
-    with open('tfidf_vectorizer.pkl', 'rb') as file:
-        tfidf_vectorizer = pickle.load(file)
-except FileNotFoundError:
-    st.error("Error: sentiment_model.pkl or tfidf_vectorizer.pkl not found. Make sure they are in the same directory as app.py")
-    st.stop()
+.title {
+    text-align: center;
+    font-size: 42px;
+    font-weight: bold;
+    color: #FF4B4B;
+}
 
-# --- Preprocessing functions (consistent with notebook) ---
+.subtitle {
+    text-align: center;
+    font-size: 18px;
+    color: #B0B0B0;
+    margin-bottom: 25px;
+}
 
-def clean_html(text):
-    clean = re.compile('<.*?>')
-    return re.sub(clean, '', text)
+.info-box {
+    background: linear-gradient(135deg, #1f2937, #111827);
+    padding: 15px;
+    border-radius: 12px;
+    border-left: 5px solid #FF4B4B;
+    margin-bottom: 20px;
+}
 
-def convert_lower(text):
-    return text.lower()
+.footer {
+    text-align:center;
+    color: #888888;
+    margin-top: 40px;
+    font-size: 15px;
+}
 
-def remove_special(text):
-    x = ''
-    for i in text:
-        if i.isalnum():
-            x = x + i
-        else:
-            x = x + ' '
-    return x
+.author {
+    text-align:center;
+    color:#00D4FF;
+    font-size:18px;
+    font-weight:bold;
+}
+</style>
+""", unsafe_allow_html=True)
 
-def clean_text(text):
-    # 1. Clean HTML tags
-    text = clean_html(text)
+# Header
+st.markdown('<div class="title">🎬 Movie Review Sentiment Analyzer</div>',
+            unsafe_allow_html=True)
 
-    # 2. Convert to lowercase
-    text = convert_lower(text)
+st.markdown("""
+<div class="subtitle">
+AI-Powered Movie Review Classification using TF-IDF & Machine Learning
+</div>
+""", unsafe_allow_html=True)
 
-    # 3. Remove special characters
-    text = remove_special(text)
+# Project Info Card
+st.markdown("""
+<div class="info-box">
+<b>About Project</b><br>
+This application analyzes movie reviews and predicts whether the sentiment expressed is Positive 😊 or Negative 😞.
+The model has been trained using Natural Language Processing (NLP) techniques and TF-IDF feature extraction.
+</div>
+""", unsafe_allow_html=True)
 
-    # 4. Remove stop words and lemmatize
-    words = []
-    for i in text.split():
-        if i not in stops:
-            words.append(lemmatizer.lemmatize(i)) # Use lemmatizer
+# Input Area
+st.subheader("📝 Enter Movie Review")
 
-    # 5. Join back into a string
-    return " ".join(words)
+user_input = st.text_area(
+    "",
+    placeholder="Example: This movie was absolutely fantastic. The acting and storyline were brilliant!",
+    height=180
+)
 
-# --- Streamlit App ---
-st.title('Sentiment Analysis App')
-st.write('Enter a movie review below to predict its sentiment (Positive/Negative).')
+# Prediction Button
+predict_btn = st.button("🔍 Analyze Sentiment", use_container_width=True)
 
-user_input = st.text_area('Enter your review here:', '', height=150)
+if predict_btn:
 
-if st.button('Predict Sentiment'):
     if user_input:
-        # Preprocess the user input
-        processed_input = clean_text(user_input)
 
-        # Vectorize the preprocessed input
-        vectorized_input = tfidf_vectorizer.transform([processed_input])
+        with st.spinner("Analyzing Review..."):
 
-        # Make prediction
-        prediction = model.predict(vectorized_input)
+            processed_input = clean_text(user_input)
 
-        # Interpret prediction
-        sentiment_map = {1: 'Positive', 0: 'Negative'}
-        predicted_sentiment = sentiment_map[prediction[0]]
+            vectorized_input = tfidf_vectorizer.transform([processed_input])
 
-        st.write(f"**Processed Review:** {processed_input}")
-        st.write(f"**Predicted Sentiment:** {predicted_sentiment}")
+            prediction = model.predict(vectorized_input)
 
-        if predicted_sentiment == 'Positive':
-            st.success('This review expresses a **Positive** sentiment! 🎉')
+            sentiment_map = {
+                1: "Positive",
+                0: "Negative"
+            }
+
+            predicted_sentiment = sentiment_map[prediction[0]]
+
+        st.divider()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric("Review Length",
+                      f"{len(user_input.split())} Words")
+
+        with col2:
+            st.metric("Processed Tokens",
+                      f"{len(processed_input.split())}")
+
+        st.subheader("🧹 Processed Review")
+        st.info(processed_input)
+
+        st.subheader("📊 Prediction Result")
+
+        if predicted_sentiment == "Positive":
+            st.success(
+                "🎉 Positive Sentiment Detected\n\nThis review reflects a favorable opinion about the movie."
+            )
         else:
-            st.error('This review expresses a **Negative** sentiment! 😞')
+            st.error(
+                "😞 Negative Sentiment Detected\n\nThis review reflects an unfavorable opinion about the movie."
+            )
+
+        st.markdown(
+            f"### 🎯 Predicted Sentiment: **{predicted_sentiment}**")
+
     else:
-        st.warning('Please enter some text to predict.')
+        st.warning("⚠️ Please enter a movie review first.")
+
+# Sidebar
+with st.sidebar:
+    st.image(
+        "https://cdn-icons-png.flaticon.com/512/4221/4221419.png",
+        width=120
+    )
+
+    st.header("📌 Project Details")
+
+    st.write("""
+    **Model:** Machine Learning Classifier
+    
+    **Feature Extraction:** TF-IDF
+    
+    **Text Processing:**
+    - HTML Removal
+    - Lowercasing
+    - Stopword Removal
+    - Lemmatization
+    
+    **Task:** Binary Sentiment Classification
+    """)
 
 # Footer
-st.markdown("""
----
-Created with Streamlit and a trained sentiment analysis model.
-""")
+st.markdown("---")
+
+st.markdown(
+    '<div class="author">👨‍💻 Developed By: Gursimar Singh Kohli</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="footer">B.Tech Computer Science Engineering (AI & ML)</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="footer">Built with Streamlit • NLP • Machine Learning</div>',
+    unsafe_allow_html=True
+)
