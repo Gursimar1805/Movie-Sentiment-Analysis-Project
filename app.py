@@ -1,3 +1,17 @@
+import streamlit as st
+import pickle
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
+# MUST come after importing streamlit
+st.set_page_config(
+    page_title="Movie Review Sentiment Analysis",
+    page_icon="🎬",
+    layout="centered"
+)
+
 # --- Streamlit App UI ---
 
 st.set_page_config(
