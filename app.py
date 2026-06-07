@@ -3,91 +3,103 @@ import pickle
 import re
 import nltk
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
-import warnings
-warnings.filterwarnings('ignore')
+from nltk.stem import WordNetLemmatizer # Use WordNetLemmatizer
 
-@st.cache_resource
-def download_nltk_data():
-    try:
-        nltk.data.find('corpora/stopwords')
-    except LookupError:
-        nltk.download('stopwords', quiet=True)
+# Download NLTK resources if not already present
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
-download_nltk_data()
-ps = PorterStemmer()
+# Initialize lemmatizer and stopwords globally
+lemmatizer = WordNetLemmatizer()
+stops = set(stopwords.words('english'))
+stops = stops - {'not', 'no', 'nor'} # Keep sentiment-altering stopwords
+
+# Load the trained model and vectorizer
+try:
+    with open('model.pkl', 'rb') as file:
+        model = pickle.load(file)
+    with open('vectorizer.pkl', 'rb') as file:
+        tfidf_vectorizer = pickle.load(file)
+except FileNotFoundError:
+    st.error("Error: model.pkl or vectorizer.pkl not found. Make sure they are in the same directory as app.py")
+    st.stop()
+
+# --- Preprocessing functions (consistent with notebook) ---
+
+def clean_html(text):
+    clean = re.compile('<.*?>')
+    return re.sub(clean, '', text)
+
+def convert_lower(text):
+    return text.lower()
+
+def remove_special(text):
+    x = ''
+    for i in text:
+        if i.isalnum():
+            x = x + i
+        else:
+            x = x + ' '
+    return x
 
 def clean_text(text):
-    text = re.sub('<.*?>', '', text)
-    text = re.sub('[^a-zA-Z]', ' ', text)
-    text = text.lower()
-    words = text.split()
-    words = [ps.stem(word) for word in words if word not in stopwords.words('english')]
-    return ' '.join(words)
+    # 1. Clean HTML tags
+    text = clean_html(text)
 
-@st.cache_resource
-def load_model():
-    try:
-        with open('sentiment_model.pkl', 'rb') as f:
-            model = pickle.load(f)
-        with open('tfidf_vectorizer.pkl', 'rb') as f:
-            vectorizer = pickle.load(f)
-        return model, vectorizer
-    except FileNotFoundError:
-        return None, None
+    # 2. Convert to lowercase
+    text = convert_lower(text)
 
-st.set_page_config(page_title="Movie Review Sentiment Analyzer", page_icon="🎬", layout="wide")
-st.markdown("""<style>.positive {background-color: #d4edda; border-left: 5px solid #28a745; padding: 20px; border-radius: 5px; margin: 10px 0;} .negative {background-color: #f8d7da; border-left: 5px solid #dc3545; padding: 20px; border-radius: 5px; margin: 10px 0;}</style>""", unsafe_allow_html=True)
+    # 3. Remove special characters
+    text = remove_special(text)
 
-st.title("🎬 Movie Review Sentiment Analyzer")
-st.markdown("### Analyze the sentiment of movie reviews using Machine Learning")
+    # 4. Remove stop words and lemmatize
+    words = []
+    for i in text.split():
+        if i not in stops:
+            words.append(lemmatizer.lemmatize(i)) # Use lemmatizer
 
-with st.sidebar:
-    st.header("About")
-    st.info("This application uses NLP and Machine Learning to predict whether a movie review is Positive or Negative.")
-    if st.button("Try Positive Example"):
-        st.session_state.sample_text = "This movie was absolutely fantastic! The acting was superb and the storyline kept me engaged throughout."
-    if st.button("Try Negative Example"):
-        st.session_state.sample_text = "Terrible movie. Poor acting and boring plot. Complete waste of time."
+    # 5. Join back into a string
+    return " ".join(words)
 
-col1, col2 = st.columns([2, 1])
-with col1:
-    default_text = st.session_state.get('sample_text', '')
-    review_text = st.text_area("Enter a movie review:", value=default_text, height=200, placeholder="Type or paste a movie review here...")
-    analyze_button = st.button("🔍 Analyze Sentiment", type="primary", use_container_width=True)
+# --- Streamlit App ---
+st.title('Sentiment Analysis App')
+st.write('Enter a movie review below to predict its sentiment (Positive/Negative).')
 
-with col2:
-    st.markdown("### Quick Stats")
-    if review_text:
-        st.metric("Words", len(review_text.split()))
-        st.metric("Characters", len(review_text))
+user_input = st.text_area('Enter your review here:', '', height=150)
 
-if analyze_button:
-    if not review_text.strip():
-        st.warning("⚠️ Please enter a review to analyze.")
-    else:
-        model, vectorizer = load_model()
-        if model is None or vectorizer is None:
-            st.error("❌ Model files not found!")
+if st.button('Predict Sentiment'):
+    if user_input:
+        # Preprocess the user input
+        processed_input = clean_text(user_input)
+
+        # Vectorize the preprocessed input
+        vectorized_input = tfidf_vectorizer.transform([processed_input])
+
+        # Make prediction
+        prediction = model.predict(vectorized_input)
+
+        # Interpret prediction
+        sentiment_map = {1: 'Positive', 0: 'Negative'}
+        predicted_sentiment = sentiment_map[prediction[0]]
+
+        st.write(f"**Processed Review:** {processed_input}")
+        st.write(f"**Predicted Sentiment:** {predicted_sentiment}")
+
+        if predicted_sentiment == 'Positive':
+            st.success('This review expresses a **Positive** sentiment! 🎉')
         else:
-            with st.spinner("Analyzing sentiment..."):
-                cleaned_text = clean_text(review_text)
-                text_vector = vectorizer.transform([cleaned_text])
-                # Convert sparse to dense if needed
-                if hasattr(text_vector, 'toarray'):
-                    text_vector = text_vector.toarray()
-                prediction = model.predict(text_vector)[0]
-                prediction_proba = model.predict_proba(text_vector)[0]
-                st.markdown("---")
-                st.subheader("Analysis Results")
-                if prediction == 1:
-                    st.markdown("<div class='positive'><h2>😊 Positive Sentiment</h2><p>This review expresses a positive opinion about the movie.</p></div>", unsafe_allow_html=True)
-                    confidence = prediction_proba[1] * 100
-                else:
-                    st.markdown("<div class='negative'><h2>😞 Negative Sentiment</h2><p>This review expresses a negative opinion about the movie.</p></div>", unsafe_allow_html=True)
-                    confidence = prediction_proba[0] * 100
-                st.markdown(f"**Confidence Score:** {confidence:.2f}%")
-                st.progress(confidence / 100)
+            st.error('This review expresses a **Negative** sentiment! 😞')
+    else:
+        st.warning('Please enter some text to predict.')
 
-st.markdown("---")
-st.markdown("<div style='text-align: center; color: #666;'><p>Built with ❤️ using Streamlit | Gursimar Singh Kohli | CSE-AIML</p></div>", unsafe_allow_html=True)
+# Footer
+st.markdown("""
+---
+Created with Streamlit and a trained sentiment analysis model.
+""")
