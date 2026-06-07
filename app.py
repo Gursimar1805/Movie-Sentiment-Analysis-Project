@@ -73,6 +73,9 @@ if analyze_button:
             with st.spinner("Analyzing sentiment..."):
                 cleaned_text = clean_text(review_text)
                 text_vector = vectorizer.transform([cleaned_text])
+                # Convert sparse to dense if needed
+                if hasattr(text_vector, 'toarray'):
+                    text_vector = text_vector.toarray()
                 prediction = model.predict(text_vector)[0]
                 prediction_proba = model.predict_proba(text_vector)[0]
                 st.markdown("---")
